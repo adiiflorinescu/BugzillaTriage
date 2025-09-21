@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Configurator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #notifications { position: fixed; top: 1rem; right: 1rem; z-index: 1050; }
+        .toast { min-width: 250px; }
+        #test-log { max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.875em; }
+        .automatic-options { display: none; } /* Hide by default */
+    </style>
+</head>
+<body class="bg-light">
+
+    <div id="notifications" class="toast-container"></div>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Query Configurator</h1>
+            <a href="/" class="btn btn-primary">Back to Bug View</a>
+        </div>
+
+        <div class="card p-3 mb-4 shadow-sm">
+            <h2 class="h4" id="form-title">Add New Query</h2>
+            <form id="query-form">
+                <input type="hidden" id="query_id" name="query_id">
+                <div class="mb-3">
+                    <label for="name" class="form-label">Name</label>
+                    <input type="text" id="name" name="name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label for="query_url" class="form-label">Bugzilla Query URL</label>
+                    <textarea id="query_url" name="query_url" class="form-control" rows="3" required></textarea>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label for="details" class="form-label">Details</label>
+                        <input type="text" id="details" name="details" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="workplace_id" class="form-label">Workplace</label>
+                        <select id="workplace_id" name="workplace_id" class="form-select" required></select>
+                    </div>
+                </div>
+
+                <hr/>
+                <h3 class="h5 mt-3">Scheduling</h3>
+                <div class="row g-3">
+                     <div class="col-md-4">
+                        <label for="frequency_type" class="form-label">Frequency</label>
+                        <select id="frequency_type" name="frequency_type" class="form-select">
+                            <option value="manual">Manual</option>
+                            <option value="automatic">Automatic</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-3 mt-2 automatic-options">
+                    <div class="col-md-4">
+                        <label for="run_hour" class="form-label">Run at Hour (24h)</label>
+                        <input type="number" id="run_hour" name="run_hour" class="form-control" min="0" max="23">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="run_timezone" class="form-label">Timezone</label>
+                        <select id="run_timezone" name="run_timezone" class="form-select"></select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="frequency_interval_hours" class="form-label">Repeat Every (Hours)</label>
+                        <input type="number" id="frequency_interval_hours" name="frequency_interval_hours" class="form-control" min="1">
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex justify-content-between">
+                    <div>
+                        <button type="submit" class="btn btn-success">Save Query</button>
+                        <button type="button" id="cancel-edit-btn" class="btn btn-secondary d-none">Cancel Edit</button>
+                    </div>
+                    <button type="button" id="test-btn" class="btn btn-info">Test Query URL</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h3 class="h5">Test Results Log</h3>
+                <div id="test-log" class="p-2 bg-dark text-white rounded">
+                    Click "Test Query URL" to see results here...
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h4 mb-3">Saved Queries</h2>
+                <table id="queries-table" class="table table-striped table-bordered table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Name</th>
+                            <th>Workplace</th>
+                            <th>Frequency</th>
+                            <th>Details</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const form = document.getElementById('query-form');
+        const formTitle = document.getElementById('form-title');
+        const testBtn = document.getElementById('test-btn');
+        const testLog = document.getElementById('test-log');
+        const tableBody = document.querySelector('#queries-table tbody');
+        const cancelBtn = document.getElementById('cancel-edit-btn');
+        const queryIdInput = document.getElementById('query_id');
+        const frequencyTypeSelect = document.getElementById('frequency_type');
+
+        // Get handles to the automatic scheduling inputs
+        const runHourInput = document.getElementById('run_hour');
+        const runTimezoneInput = document.getElementById('run_timezone');
+        const frequencyIntervalInput = document.getElementById('frequency_interval_hours');
+
+        let workplaceMap = {};
+
+        function showNotification(message, type = 'success') {
+            const notificationsContainer = document.getElementById('notifications');
+            const toastId = 'toast-' + Date.now();
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-white ${type === 'error' ? 'bg-danger' : 'bg-success'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>
+                </div>`;
+            notificationsContainer.insertAdjacentHTML('beforeend', toastHTML);
+            const toast = new bootstrap.Toast(document.getElementById(toastId), { delay: 5000 });
+            toast.show();
+        }
+
+        function populateTimezones() {
+            const timezoneSelect = document.getElementById('run_timezone');
+            const timezones = Intl.supportedValuesOf('timeZone');
+            timezones.forEach(tz => {
+                const option = new Option(tz, tz);
+                timezoneSelect.add(option);
+            });
+            timezoneSelect.value = Intl.DateTimeFormat().resolvedOptions().timeZone; // Default to user's timezone
+        }
+
+        function toggleAutomaticOptions() {
+            const automaticOptions = document.querySelectorAll('.automatic-options');
+            const isAutomatic = frequencyTypeSelect.value === 'automatic';
+
+            automaticOptions.forEach(el => {
+                el.style.display = isAutomatic ? 'flex' : 'none';
+            });
+
+            // FIX: Enable or disable the inputs based on visibility.
+            // Disabled inputs are not sent with the form data.
+            runHourInput.disabled = !isAutomatic;
+            runTimezoneInput.disabled = !isAutomatic;
+            frequencyIntervalInput.disabled = !isAutomatic;
+        }
+
+        async function populateWorkplaces() {
+            const workplaceSelect = document.getElementById('workplace_id');
+            workplaceSelect.innerHTML = '';
+            const response = await fetch('/api/workplaces');
+            const workplaces = await response.json();
+
+            workplaceMap = {};
+            let selectableWorkplaces = 0;
+
+            workplaces.forEach(w => {
+                workplaceMap[w.id] = w.name;
+                // "My Dashboard" is not a valid target for queries
+                if (w.name !== 'My Dashboard') {
+                    const option = new Option(w.name, w.id);
+                    workplaceSelect.add(option);
+                    selectableWorkplaces++;
+                }
+            });
+
+            if (selectableWorkplaces === 0) {
+                const placeholder = new Option("No workplaces available. Create one first.", "");
+                placeholder.disabled = true;
+                workplaceSelect.add(placeholder);
+            }
+        }
+
+        function getFrequencyText(query) {
+            if (query.frequency_type === 'automatic') {
+                return `Every ${query.frequency_interval_hours}h, at hour ${query.run_hour} (${query.run_timezone})`;
+            }
+            return 'Manual';
+        }
+
+        async function fetchQueries() {
+            try {
+                const response = await fetch('/api/queries');
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                         alert('Your session has expired. Please log in again.');
+                         window.location.href = '/';
+                         return;
+                    }
+                    throw new Error('Failed to load queries.');
+                }
+                const queries = await response.json();
+                tableBody.innerHTML = '';
+                if (queries.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No queries saved yet.</td></tr>';
+                    return;
+                }
+                queries.forEach(q => {
+                    const row = tableBody.insertRow();
+                    row.dataset.query = JSON.stringify(q);
+                    const workplaceName = workplaceMap[q.workplace_id] || 'N/A';
+
+                    row.innerHTML = `
+                        <td>${q.name}</td>
+                        <td>${workplaceName}</td>
+                        <td>${getFrequencyText(q)}</td>
+                        <td>${q.details || ''}</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm edit-btn">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-btn" data-id="${q.id}">Delete</button>
+                        </td>
+                    `;
+                });
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        }
+
+        function resetForm() {
+            form.reset();
+            queryIdInput.value = '';
+            formTitle.textContent = 'Add New Query';
+            cancelBtn.classList.add('d-none');
+            toggleAutomaticOptions();
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const queryId = queryIdInput.value;
+            const url = queryId ? `/api/queries/${queryId}` : '/api/queries';
+            const method = queryId ? 'PUT' : 'POST';
+
+            // The toggleAutomaticOptions function now handles disabling inputs,
+            // so FormData will correctly exclude them when not needed.
+            const body = new URLSearchParams(new FormData(form));
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to save query.');
+                }
+                showNotification(`Query ${queryId ? 'updated' : 'created'} successfully!`);
+                resetForm();
+                fetchQueries();
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        });
+
+        tableBody.addEventListener('click', async (e) => {
+            const target = e.target;
+            const row = target.closest('tr');
+            if (!row) return;
+
+            if (target.classList.contains('edit-btn')) {
+                const queryData = JSON.parse(row.dataset.query);
+                formTitle.textContent = `Edit Query: ${queryData.name}`;
+                queryIdInput.value = queryData.id;
+                document.getElementById('name').value = queryData.name;
+                document.getElementById('query_url').value = queryData.query_url;
+                document.getElementById('details').value = queryData.details;
+                document.getElementById('workplace_id').value = queryData.workplace_id;
+                document.getElementById('frequency_type').value = queryData.frequency_type;
+
+                // Set values, which might be null/undefined from the DB
+                runHourInput.value = queryData.run_hour;
+                runTimezoneInput.value = queryData.run_timezone;
+                frequencyIntervalInput.value = queryData.frequency_interval_hours;
+
+                toggleAutomaticOptions();
+                cancelBtn.classList.remove('d-none');
+                window.scrollTo(0, 0);
+            }
+
+            if (target.classList.contains('delete-btn')) {
+                const queryId = e.target.dataset.id;
+                if (confirm('Are you sure you want to delete this query?')) {
+                    try {
+                        const response = await fetch(`/api/queries/${queryId}`, { method: 'DELETE' });
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.detail || 'Failed to delete query.');
+                        }
+                        showNotification('Query deleted.');
+                        fetchQueries();
+                    } catch (error) {
+                        showNotification(error.message, 'error');
+                    }
+                }
+            }
+        });
+
+        testBtn.addEventListener('click', async () => {
+            const queryUrl = document.getElementById('query_url').value;
+            if (!queryUrl) {
+                showNotification('Please enter a Query URL to test.', 'error');
+                return;
+            }
+            testLog.innerHTML = 'Testing...';
+            try {
+                const body = new URLSearchParams({ query_url: queryUrl });
+                const response = await fetch('/api/queries/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.detail || 'Test failed.');
+                testLog.innerHTML = `<strong>Success! Found ${result.bug_count} bugs.</strong><br>${result.bug_ids.join(', ')}`;
+            } catch (error) {
+                testLog.innerHTML = `<span class="text-danger">Error: ${error.message}</span>`;
+                showNotification(error.message, 'error');
+            }
+        });
+
+        frequencyTypeSelect.addEventListener('change', toggleAutomaticOptions);
+        cancelBtn.addEventListener('click', resetForm);
+
+        async function initializePage() {
+            populateTimezones();
+            await populateWorkplaces();
+            await fetchQueries();
+            toggleAutomaticOptions();
+        }
+
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+</body>
+</html>

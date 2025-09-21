@@ -1,0 +1,52 @@
+    # --- Secrets ---
+    # Never commit environment-specific secrets!
+    .env
+
+    # --- Databases ---
+    # Ignore SQLite database files and their journals
+    *.db
+    *.db-journal*
+
+    # --- Python ---
+    # Byte-compiled / optimized / DLL files
+    __pycache__/
+    *.py[cod]
+    *$py.class
+
+    # C extensions
+    *.so
+
+    # Distribution / packaging
+    .Python
+    build/
+    develop-eggs/
+    dist/
+    downloads/
+    eggs/
+    .eggs/
+    lib/
+    lib64/
+    parts/
+    sdist/
+    var/
+    wheels/
+    *.egg-info/
+    .installed.cfg
+    *.egg
+
+    # --- Virtual Environments ---
+    # It's a best practice to not commit the virtual environment itself
+    venv/
+    .venv/
+
+    # --- IDE / Editor ---
+    # JetBrains (PyCharm)
+    .idea/
+
+    # VSCode
+    .vscode/
+
+    # --- Testing & Coverage ---
+    .pytest_cache/
+    .coverage
+    htmlcov/

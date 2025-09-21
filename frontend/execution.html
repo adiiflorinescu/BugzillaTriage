@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Execution Status</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #notifications { position: fixed; top: 1rem; right: 1rem; z-index: 1050; }
+        .toast { min-width: 250px; }
+        .table-responsive { overflow-x: auto; }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div id="notifications" class="toast-container"></div>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Query Execution Status</h1>
+            <a href="/" class="btn btn-primary">Back to Main Dashboard</a>
+        </div>
+
+        <!-- Automatic Queries Section -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <h2 class="h4 mb-0">Automatic Queries</h2>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="automatic-queries-table" class="table table-striped table-bordered table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Name</th>
+                                <th>Frequency</th>
+                                <th>Last Execution</th>
+                                <th>Next Execution</th>
+                                <th>Details</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Queries Section -->
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h2 class="h4 mb-0">Manual Queries</h2>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="manual-queries-table" class="table table-striped table-bordered table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Name</th>
+                                <th>Frequency</th>
+                                <th>Last Execution</th>
+                                <th>Next Execution</th>
+                                <th>Details</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const automaticTableBody = document.querySelector('#automatic-queries-table tbody');
+        const manualTableBody = document.querySelector('#manual-queries-table tbody');
+        let currentUserRole = 'user'; // Default role
+
+        function showNotification(message, type = 'success') {
+            const notificationsContainer = document.getElementById('notifications');
+            const toastId = 'toast-' + Date.now();
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-white ${type === 'error' ? 'bg-danger' : 'bg-success'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>
+                </div>`;
+            notificationsContainer.insertAdjacentHTML('beforeend', toastHTML);
+            const toast = new bootstrap.Toast(document.getElementById(toastId), { delay: 5000 });
+            toast.show();
+        }
+
+        function formatDateTime(dateString) {
+            // If the date string from the backend is null or undefined, return null.
+            if (!dateString) return null;
+
+            // Create a new Date object from the ISO string (e.g., "2023-11-21T15:30:00Z").
+            // JavaScript's Date object automatically understands the UTC format.
+            const date = new Date(dateString);
+
+            // Use toLocaleString() to format the date. This method automatically uses the
+            // user's local timezone and locale settings from their browser/OS.
+            return date.toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
+        function getFrequencyText(query) {
+            if (query.frequency_type === 'automatic') {
+                return `Every ${query.frequency_interval_hours || '?'}h`;
+            }
+            return 'Manual';
+        }
+
+        function renderTables(queries) {
+            automaticTableBody.innerHTML = '';
+            manualTableBody.innerHTML = '';
+
+            const automaticQueries = queries.filter(q => q.frequency_type === 'automatic');
+            const manualQueries = queries.filter(q => q.frequency_type === 'manual');
+
+            if (automaticQueries.length === 0) {
+                automaticTableBody.innerHTML = '<tr><td colspan="6" class="text-center">No automatic queries found.</td></tr>';
+            } else {
+                automaticQueries.forEach(q => renderRow(q, automaticTableBody));
+            }
+
+            if (manualQueries.length === 0) {
+                manualTableBody.innerHTML = '<tr><td colspan="6" class="text-center">No manual queries found.</td></tr>';
+            } else {
+                manualQueries.forEach(q => renderRow(q, manualTableBody));
+            }
+        }
+
+        function renderRow(q, tableBody) {
+            const row = tableBody.insertRow();
+            // Use the updated formatDateTime function
+            const lastExec = formatDateTime(q.last_executed_at) || 'Never executed';
+            const nextExec = q.frequency_type === 'manual' ? 'Manual' : (formatDateTime(q.next_execution_at) || 'Not Scheduled');
+
+            const editButton = currentUserRole === 'administrator'
+                ? `<a href="/queries.html#edit-${q.id}" class="btn btn-sm btn-secondary ms-1">Edit</a>`
+                : '';
+
+            row.innerHTML = `
+                <td>${q.name}</td>
+                <td>${getFrequencyText(q)}</td>
+                <td>${lastExec}</td>
+                <td>${nextExec}</td>
+                <td>${q.details || ''}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary execute-btn" data-id="${q.id}">Execute Now</button>
+                    ${editButton}
+                </td>
+            `;
+        }
+
+        async function fetchAndRenderQueries() {
+            try {
+                const response = await fetch('/api/queries');
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                         alert('Your session has expired. Please log in again.');
+                         window.location.href = '/';
+                         return;
+                    }
+                    throw new Error('Failed to load queries.');
+                }
+                const queries = await response.json();
+                renderTables(queries);
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        }
+
+        async function initializePage() {
+            try {
+                const userResponse = await fetch('/api/users/me');
+                if (!userResponse.ok) throw new Error('Could not verify user.');
+                const user = await userResponse.json();
+                currentUserRole = user.role;
+            } catch (e) {
+                alert('Your session has expired. Please log in again.');
+                window.location.href = '/';
+                return;
+            }
+            await fetchAndRenderQueries();
+        }
+
+        document.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('execute-btn')) {
+                const queryId = e.target.dataset.id;
+                e.target.disabled = true;
+                e.target.textContent = 'Executing...';
+
+                try {
+                    const response = await fetch(`/api/queries/${queryId}/execute`, { method: 'POST' });
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.detail || 'Execution failed.');
+                    }
+                    const result = await response.json();
+                    showNotification(result.message, 'success');
+                    // Refresh the data after a short delay to allow the backend to update
+                    setTimeout(fetchAndRenderQueries, 2000);
+                } catch (error) {
+                    showNotification(error.message, 'error');
+                } finally {
+                    e.target.disabled = false;
+                    e.target.textContent = 'Execute Now';
+                }
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+</body>
+</html>

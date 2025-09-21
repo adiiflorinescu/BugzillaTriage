@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bugzilla Columns Configurator</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #notifications {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1050;
+        }
+        .toast {
+            min-width: 250px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <!-- Notification container -->
+    <div id="notifications" class="toast-container"></div>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Configure Bug Columns</h1>
+            <a href="/" class="btn btn-primary">Back to Bug View</a>
+        </div>
+
+        <div class="card p-3 mb-4 shadow-sm">
+            <h2 class="h4">Add New Column</h2>
+            <form id="column-form" class="row g-3 align-items-end">
+                <div class="col-md">
+                    <label for="name" class="form-label">Display Name</label>
+                    <input type="text" id="name" name="name" class="form-control" placeholder="e.g., 'Summary'" required>
+                </div>
+                <div class="col-md">
+                    <label for="bugzilla_field" class="form-label">Bugzilla Field</label>
+                    <input type="text" id="bugzilla_field" name="bugzilla_field" class="form-control" placeholder="e.g., 'summary'" required>
+                </div>
+                <div class="col-md">
+                    <label for="data_type" class="form-label">Data Type</label>
+                    <select id="data_type" name="data_type" class="form-select" required>
+                        <option value="char">Text (char)</option>
+                        <option value="int">Number (int)</option>
+                        <option value="float">Decimal (float)</option>
+                        <option value="bool">Boolean (bool)</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-success">Add Column</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h4 mb-3">Current Columns</h2>
+                <table id="columns-table" class="table table-striped table-bordered table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Display Name</th>
+                            <th>Bugzilla Field</th>
+                            <th>Data Type</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // No need for token or authHeader constants anymore!
+        const form = document.getElementById('column-form');
+        const tableBody = document.querySelector('#columns-table tbody');
+
+        // --- Notification Helper ---
+        function showNotification(message, type = 'success') {
+            const notificationsContainer = document.getElementById('notifications');
+            const toastId = 'toast-' + Date.now();
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-white ${type === 'error' ? 'bg-danger' : 'bg-success'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            notificationsContainer.insertAdjacentHTML('beforeend', toastHTML);
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+            toast.show();
+            toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+        }
+
+        // This function is simplified as it doesn't need to check roles.
+        // The server denies access to the page itself if the user is not an admin.
+        async function fetchColumns() {
+            try {
+                // No headers needed, the browser sends the cookie automatically.
+                const response = await fetch('/api/columns');
+
+                if (!response.ok) {
+                    // If the cookie is invalid or expired, the server will return 401/403
+                    if (response.status === 401 || response.status === 403) {
+                         alert('Your session has expired. Please log in again.');
+                         window.location.href = '/';
+                         return; // Stop execution
+                    }
+                    throw new Error('Failed to load columns.');
+                }
+
+                const columns = await response.json();
+
+                tableBody.innerHTML = ''; // Clear existing rows
+                if (columns.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="4" class="text-center">No columns configured yet.</td></tr>';
+                    return;
+                }
+
+                columns.forEach(col => {
+                    const row = tableBody.insertRow();
+                    row.innerHTML = `
+                        <td>${col.name}</td>
+                        <td>${col.bugzilla_field}</td>
+                        <td>${col.data_type}</td>
+                        <td><button class="btn btn-danger btn-sm delete-btn" data-id="${col.id}">Delete</button></td>
+                    `;
+                });
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = new URLSearchParams(new FormData(form));
+
+            try {
+                const response = await fetch('/api/columns', {
+                    method: 'POST',
+                    // No headers needed for auth!
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to add column.');
+                }
+                showNotification('Column added successfully!');
+                form.reset();
+                fetchColumns();
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        });
+
+        tableBody.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('delete-btn')) {
+                const columnId = e.target.dataset.id;
+                if (confirm('Are you sure you want to delete this column?')) {
+                    try {
+                        const response = await fetch(`/api/columns/${columnId}`, {
+                            method: 'DELETE' // No headers needed!
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.detail || 'Failed to delete column.');
+                        }
+                        showNotification('Column deleted.');
+                        fetchColumns();
+                    } catch (error) {
+                        showNotification(error.message, 'error');
+                    }
+                }
+            }
+        });
+
+        // On page load, just fetch the data. The server has already verified admin access.
+        document.addEventListener('DOMContentLoaded', fetchColumns);
+    </script>
+</body>
+</html>
