@@ -5,37 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Query Execution Status</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/frontend/css/main.css">
     <style>
-        #notifications { position: fixed; top: 1rem; right: 1rem; z-index: 1050; }
-        .toast { min-width: 250px; }
         .table-responsive { overflow-x: auto; }
     </style>
 </head>
-<body class="bg-light">
+<body>
 
-    <div id="notifications" class="toast-container"></div>
+    <!-- Sidebar: Populated by js/main.js -->
+    <nav id="sidebar-nav" class="nav flex-column"></nav>
 
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Query Execution Status</h1>
-            <a href="/" class="btn btn-primary">Back to Main Dashboard</a>
-        </div>
+    <!-- Main Content -->
+    <main id="main-page-content">
+        <div id="notifications" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
 
         <!-- Automatic Queries Section -->
         <div class="card shadow-sm mb-4">
             <div class="card-header">
-                <h2 class="h4 mb-0">Automatic Queries</h2>
+                <h2 class="h4 mb-0">All Queries</h2>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table id="automatic-queries-table" class="table table-striped table-bordered table-hover mb-0">
+                    <table id="queries-table" class="table table-striped table-bordered table-hover mb-0">
                         <thead class="table-dark">
                             <tr>
                                 <th>Name</th>
                                 <th>Frequency</th>
                                 <th>Last Execution</th>
                                 <th>Next Execution</th>
-                                <th>Details</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -44,49 +41,31 @@
                 </div>
             </div>
         </div>
+    </main>
 
-        <!-- Manual Queries Section -->
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <h2 class="h4 mb-0">Manual Queries</h2>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table id="manual-queries-table" class="table table-striped table-bordered table-hover mb-0">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Name</th>
-                                <th>Frequency</th>
-                                <th>Last Execution</th>
-                                <th>Next Execution</th>
-                                <th>Details</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+    <!-- History Modal -->
+    <div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="historyModalLabel">Execution History for...</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="history-modal-body-content" class="table-responsive">
+                        <!-- History table will be rendered here -->
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/frontend/js/main.js"></script>
     <script>
-        const automaticTableBody = document.querySelector('#automatic-queries-table tbody');
-        const manualTableBody = document.querySelector('#manual-queries-table tbody');
+        const queriesTableBody = document.querySelector('#queries-table tbody');
         let currentUserRole = 'user'; // Default role
-
-        function showNotification(message, type = 'success') {
-            const notificationsContainer = document.getElementById('notifications');
-            const toastId = 'toast-' + Date.now();
-            const toastHTML = `
-                <div id="${toastId}" class="toast align-items-center text-white ${type === 'error' ? 'bg-danger' : 'bg-success'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>
-                </div>`;
-            notificationsContainer.insertAdjacentHTML('beforeend', toastHTML);
-            const toast = new bootstrap.Toast(document.getElementById(toastId), { delay: 5000 });
-            toast.show();
-        }
+        let historyModal; // To hold the modal instance
 
         function formatDateTime(dateString) {
             // If the date string from the backend is null or undefined, return null.
@@ -108,29 +87,19 @@
         }
 
         function getFrequencyText(query) {
-            if (query.frequency_type === 'automatic') {
-                return `Every ${query.frequency_interval_hours || '?'}h`;
+            if (query.frequency_interval_hours) {
+                return `Every ${query.frequency_interval_hours}h`;
             }
             return 'Manual';
         }
 
         function renderTables(queries) {
-            automaticTableBody.innerHTML = '';
-            manualTableBody.innerHTML = '';
+            queriesTableBody.innerHTML = '';
 
-            const automaticQueries = queries.filter(q => q.frequency_type === 'automatic');
-            const manualQueries = queries.filter(q => q.frequency_type === 'manual');
-
-            if (automaticQueries.length === 0) {
-                automaticTableBody.innerHTML = '<tr><td colspan="6" class="text-center">No automatic queries found.</td></tr>';
+            if (queries.length === 0) {
+                queriesTableBody.innerHTML = '<tr><td colspan="5" class="text-center">No queries found.</td></tr>';
             } else {
-                automaticQueries.forEach(q => renderRow(q, automaticTableBody));
-            }
-
-            if (manualQueries.length === 0) {
-                manualTableBody.innerHTML = '<tr><td colspan="6" class="text-center">No manual queries found.</td></tr>';
-            } else {
-                manualQueries.forEach(q => renderRow(q, manualTableBody));
+                queries.forEach(q => renderRow(q, queriesTableBody));
             }
         }
 
@@ -138,7 +107,7 @@
             const row = tableBody.insertRow();
             // Use the updated formatDateTime function
             const lastExec = formatDateTime(q.last_executed_at) || 'Never executed';
-            const nextExec = q.frequency_type === 'manual' ? 'Manual' : (formatDateTime(q.next_execution_at) || 'Not Scheduled');
+            const nextExec = q.frequency_interval_hours ? (formatDateTime(q.next_execution_at) || 'Not Scheduled') : 'Manual';
 
             const editButton = currentUserRole === 'administrator'
                 ? `<a href="/queries.html#edit-${q.id}" class="btn btn-sm btn-secondary ms-1">Edit</a>`
@@ -149,9 +118,9 @@
                 <td>${getFrequencyText(q)}</td>
                 <td>${lastExec}</td>
                 <td>${nextExec}</td>
-                <td>${q.details || ''}</td>
                 <td>
                     <button class="btn btn-sm btn-primary execute-btn" data-id="${q.id}">Execute Now</button>
+                    <button class="btn btn-sm btn-info history-btn" data-bs-toggle="modal" data-bs-target="#historyModal" data-query-id="${q.id}" data-query-name="${q.name}">History</button>
                     ${editButton}
                 </td>
             `;
@@ -175,18 +144,49 @@
             }
         }
 
-        async function initializePage() {
+        async function showHistoryModal(queryId, queryName) {
+            const modalTitle = document.getElementById('historyModalLabel');
+            const modalBody = document.getElementById('history-modal-body-content');
+
+            modalTitle.textContent = `Execution History for "${queryName}"`;
+            modalBody.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Loading...</div>';
+
             try {
-                const userResponse = await fetch('/api/users/me');
-                if (!userResponse.ok) throw new Error('Could not verify user.');
-                const user = await userResponse.json();
-                currentUserRole = user.role;
-            } catch (e) {
-                alert('Your session has expired. Please log in again.');
-                window.location.href = '/';
-                return;
+                const response = await fetch(`/api/queries/${queryId}/history`);
+                if (!response.ok) {
+                    throw new Error('Failed to load execution history.');
+                }
+                const logs = await response.json();
+
+                if (logs.length === 0) {
+                    modalBody.innerHTML = '<p class="text-center text-muted">No execution history found for this query.</p>';
+                    return;
+                }
+
+                let tableHTML = `
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Execution Time</th>
+                                <th>Total Bugs</th>
+                                <th>Updated Bugs</th>
+                                <th>New Bugs</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${logs.map(log => `
+                                <tr>
+                                    <td>${formatDateTime(log.executed_at)}</td>
+                                    <td>${log.total_bugs_processed}</td>
+                                    <td>${log.existing_bugs_updated}</td>
+                                    <td>${log.new_bugs_added}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+                modalBody.innerHTML = tableHTML;
+            } catch (error) {
+                modalBody.innerHTML = `<p class="text-center text-danger">${error.message}</p>`;
             }
-            await fetchAndRenderQueries();
         }
 
         document.addEventListener('click', async (e) => {
@@ -212,9 +212,21 @@
                     e.target.textContent = 'Execute Now';
                 }
             }
+
+            if (e.target.classList.contains('history-btn')) {
+                const queryId = e.target.dataset.queryId;
+                const queryName = e.target.dataset.queryName;
+                showHistoryModal(queryId, queryName);
+            }
         });
 
-        document.addEventListener('DOMContentLoaded', initializePage);
+        document.addEventListener('DOMContentLoaded', () => {
+            historyModal = new bootstrap.Modal(document.getElementById('historyModal'));
+            initializePage(async (user) => {
+                currentUserRole = user.role;
+                await fetchAndRenderQueries();
+            });
+        });
     </script>
 </body>
 </html>

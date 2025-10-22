@@ -1,0 +1,179 @@
+/* General Body & Layout */
+body {
+    display: flex;
+    position: relative; /* Needed for the toggle button positioning */
+    min-height: 100vh;
+    background-color: #f8f9fa;
+}
+
+/* Sidebar Navigation */
+#sidebar-nav {
+    width: 280px;
+    min-width: 280px;
+    background-color: #212529; /* Bootstrap dark */
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    overflow-y: hidden; /* Prevent double scrollbars */
+    transition: margin-left 0.3s ease-in-out;
+}
+
+#sidebar-nav .sidebar-header {
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #495057;
+}
+
+#sidebar-nav .sidebar-header h2 {
+    font-size: 1.5rem;
+    margin: 0;
+}
+
+#sidebar-nav .sidebar-header .welcome-text {
+    font-size: 0.8rem;
+    color: #adb5bd;
+    margin-top: 0.25rem;
+    display: block; /* Ensure it takes its own line */
+}
+
+#sidebar-nav .nav-container {
+    flex-grow: 1;
+    overflow-y: auto; /* Allow content to scroll */
+    padding-bottom: 1rem;
+}
+
+#sidebar-nav .nav-link {
+    color: #adb5bd;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#sidebar-nav .nav-link:hover {
+    background-color: #343a40;
+    color: #fff;
+}
+
+#sidebar-nav .nav-link.active {
+    background-color: #0d6efd; /* Bootstrap primary */
+    color: #fff;
+    font-weight: bold;
+}
+
+#sidebar-nav .nav-category {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: #6c757d;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0 1rem;
+}
+
+/* Main Content Area */
+#main-page-content {
+    flex-grow: 1;
+    margin-left: 280px; /* Same as sidebar width */
+    padding: 2rem;
+    /* Hide by default to prevent UI flicker on page load */
+    visibility: hidden;
+    transition: margin-left 0.3s ease-in-out;
+}
+
+/* --- Sidebar Toggle Button --- */
+.sidebar-toggle-container {
+    position: fixed;
+    top: 0.5rem;
+    left: 240px; /* Position it just inside the sidebar's edge */
+    z-index: 1060; /* Above the sidebar */
+    transition: left 0.3s ease-in-out;
+}
+
+#sidebar-toggle {
+    font-size: 4rem; /* A large size that fits well in the container */
+    line-height: 1; /* Reset line-height for flexbox compatibility */
+    color: #dee2e6; /* Slightly softer white */
+    cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 50%; /* Make it circular */
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 17px; /* Nudge the icon up for perfect visual centering */
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+#sidebar-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+/* --- Collapsed Sidebar State --- */
+body.sidebar-collapsed #sidebar-nav {
+    margin-left: -280px;
+}
+
+body.sidebar-collapsed #main-page-content {
+    margin-left: 0;
+}
+
+body.sidebar-collapsed .sidebar-toggle-container {
+    left: 0.2rem; /* Position with a comfortable margin from the page edge */
+}
+
+body.sidebar-collapsed #sidebar-toggle {
+    transform: rotate(180deg);
+    color: #212529; /* Darker color when on the light background */
+    background-color: #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+body.sidebar-collapsed #sidebar-toggle:hover {
+    background-color: #f1f3f5;
+}
+
+/* --- Scheduler Status Indicator --- */
+.scheduler-status {
+    font-size: 0.75rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 0.25rem;
+    margin-top: 0.5rem;
+    display: inline-block;
+}
+.scheduler-status.online { background-color: #198754; color: white; }
+.scheduler-status.offline { background-color: #dc3545; color: white; }
+
+/* --- User Info Dropdown --- */
+.user-info-dropdown {
+    position: absolute;
+    top: 1.5rem;
+    right: 2rem;
+}
+
+.user-info-dropdown .dropdown-toggle {
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    color: #212529;
+    padding: 0.5rem 1rem;
+    border-radius: 50rem; /* Pill shape */
+    box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+}
+
+.user-info-dropdown .dropdown-menu {
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+    border-color: #dee2e6;
+}
+
+.user-info-dropdown .dropdown-item.logout {
+    color: #dc3545;
+}

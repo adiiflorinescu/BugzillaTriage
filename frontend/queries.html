@@ -5,25 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Query Configurator</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/frontend/css/main.css">
     <style>
-        #notifications { position: fixed; top: 1rem; right: 1rem; z-index: 1050; }
-        .toast { min-width: 250px; }
         #test-log { max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.875em; }
         .automatic-options { display: none; } /* Hide by default */
     </style>
 </head>
-<body class="bg-light">
+<body>
 
-    <div id="notifications" class="toast-container"></div>
+    <!-- Sidebar: Populated by js/main.js -->
+    <nav id="sidebar-nav" class="nav flex-column"></nav>
 
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Query Configurator</h1>
-            <a href="/" class="btn btn-primary">Back to Bug View</a>
-        </div>
+    <!-- Main Content -->
+    <main id="main-page-content">
+        <div id="notifications" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
 
-        <div class="card p-3 mb-4 shadow-sm">
-            <h2 class="h4" id="form-title">Add New Query</h2>
+        <div class="collapse" id="create-query-section">
+            <div class="card card-body mb-4 shadow-sm">
+                <h2 class="h4" id="form-title">Add New Query</h2>
             <form id="query-form">
                 <input type="hidden" id="query_id" name="query_id">
                 <div class="mb-3">
@@ -33,6 +32,13 @@
                 <div class="mb-3">
                     <label for="query_url" class="form-label">Bugzilla Query URL</label>
                     <textarea id="query_url" name="query_url" class="form-control" rows="3" required></textarea>
+                </div>
+                <!-- Test results log is now part of the form and hidden by default -->
+                <div id="test-results-container" class="card shadow-sm mb-3" style="display: none;">
+                    <div class="card-body">
+                        <h3 class="h6">Test Results</h3>
+                        <div id="test-log" class="p-2 bg-dark text-white rounded"></div>
+                    </div>
                 </div>
                 <div class="row g-3 mb-3">
                     <div class="col-md-6">
@@ -48,26 +54,12 @@
                 <hr/>
                 <h3 class="h5 mt-3">Scheduling</h3>
                 <div class="row g-3">
-                     <div class="col-md-4">
-                        <label for="frequency_type" class="form-label">Frequency</label>
-                        <select id="frequency_type" name="frequency_type" class="form-select">
-                            <option value="manual">Manual</option>
-                            <option value="automatic">Automatic</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="row g-3 mt-2 automatic-options">
-                    <div class="col-md-4">
-                        <label for="run_hour" class="form-label">Run at Hour (24h)</label>
-                        <input type="number" id="run_hour" name="run_hour" class="form-control" min="0" max="23">
-                    </div>
-                    <div class="col-md-4">
-                        <label for="run_timezone" class="form-label">Timezone</label>
-                        <select id="run_timezone" name="run_timezone" class="form-select"></select>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="frequency_interval_hours" class="form-label">Repeat Every (Hours)</label>
-                        <input type="number" id="frequency_interval_hours" name="frequency_interval_hours" class="form-control" min="1">
+                    <div class="col-md-4 col-lg-3">
+                        <label for="frequency_interval_hours" class="form-label">Default Frequency (Hours)</label>
+                        <input type="number" id="frequency_interval_hours" name="frequency_interval_hours" class="form-control" min="0.1" step="0.1">
+                        <div class="form-text">
+                            Set how often this query should run automatically. Leave blank for manual execution only.
+                        </div>
                     </div>
                 </div>
 
@@ -79,20 +71,18 @@
                     <button type="button" id="test-btn" class="btn btn-info">Test Query URL</button>
                 </div>
             </form>
-        </div>
-
-        <div class="card shadow-sm mb-4">
-            <div class="card-body">
-                <h3 class="h5">Test Results Log</h3>
-                <div id="test-log" class="p-2 bg-dark text-white rounded">
-                    Click "Test Query URL" to see results here...
-                </div>
             </div>
         </div>
 
         <div class="card shadow-sm">
-            <div class="card-body">
-                <h2 class="h4 mb-3">Saved Queries</h2>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="h4 mb-0">Saved Queries</h2>
+                <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#create-query-section" aria-expanded="false" aria-controls="create-query-section" id="toggle-create-btn">
+                    Create New Query
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
                 <table id="queries-table" class="table table-striped table-bordered table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -105,11 +95,13 @@
                     </thead>
                     <tbody></tbody>
                 </table>
+                </div>
             </div>
         </div>
-    </div>
+    </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/frontend/js/main.js"></script>
     <script>
         const form = document.getElementById('query-form');
         const formTitle = document.getElementById('form-title');
@@ -118,51 +110,12 @@
         const tableBody = document.querySelector('#queries-table tbody');
         const cancelBtn = document.getElementById('cancel-edit-btn');
         const queryIdInput = document.getElementById('query_id');
-        const frequencyTypeSelect = document.getElementById('frequency_type');
-
-        // Get handles to the automatic scheduling inputs
-        const runHourInput = document.getElementById('run_hour');
-        const runTimezoneInput = document.getElementById('run_timezone');
+        const createBtn = document.getElementById('toggle-create-btn');
+        const createSection = document.getElementById('create-query-section');        
         const frequencyIntervalInput = document.getElementById('frequency_interval_hours');
+        const testResultsContainer = document.getElementById('test-results-container');
 
         let workplaceMap = {};
-
-        function showNotification(message, type = 'success') {
-            const notificationsContainer = document.getElementById('notifications');
-            const toastId = 'toast-' + Date.now();
-            const toastHTML = `
-                <div id="${toastId}" class="toast align-items-center text-white ${type === 'error' ? 'bg-danger' : 'bg-success'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>
-                </div>`;
-            notificationsContainer.insertAdjacentHTML('beforeend', toastHTML);
-            const toast = new bootstrap.Toast(document.getElementById(toastId), { delay: 5000 });
-            toast.show();
-        }
-
-        function populateTimezones() {
-            const timezoneSelect = document.getElementById('run_timezone');
-            const timezones = Intl.supportedValuesOf('timeZone');
-            timezones.forEach(tz => {
-                const option = new Option(tz, tz);
-                timezoneSelect.add(option);
-            });
-            timezoneSelect.value = Intl.DateTimeFormat().resolvedOptions().timeZone; // Default to user's timezone
-        }
-
-        function toggleAutomaticOptions() {
-            const automaticOptions = document.querySelectorAll('.automatic-options');
-            const isAutomatic = frequencyTypeSelect.value === 'automatic';
-
-            automaticOptions.forEach(el => {
-                el.style.display = isAutomatic ? 'flex' : 'none';
-            });
-
-            // FIX: Enable or disable the inputs based on visibility.
-            // Disabled inputs are not sent with the form data.
-            runHourInput.disabled = !isAutomatic;
-            runTimezoneInput.disabled = !isAutomatic;
-            frequencyIntervalInput.disabled = !isAutomatic;
-        }
 
         async function populateWorkplaces() {
             const workplaceSelect = document.getElementById('workplace_id');
@@ -191,8 +144,9 @@
         }
 
         function getFrequencyText(query) {
-            if (query.frequency_type === 'automatic') {
-                return `Every ${query.frequency_interval_hours}h, at hour ${query.run_hour} (${query.run_timezone})`;
+            // If frequency_interval_hours has a value, it's automatic.
+            if (query.frequency_interval_hours) {
+                return `Every ${query.frequency_interval_hours}h`;
             }
             return 'Manual';
         }
@@ -240,7 +194,8 @@
             queryIdInput.value = '';
             formTitle.textContent = 'Add New Query';
             cancelBtn.classList.add('d-none');
-            toggleAutomaticOptions();
+            testResultsContainer.style.display = 'none'; // Hide test results on reset
+            bootstrap.Collapse.getOrCreateInstance(createSection).hide();
         }
 
         form.addEventListener('submit', async (e) => {
@@ -248,10 +203,10 @@
             const queryId = queryIdInput.value;
             const url = queryId ? `/api/queries/${queryId}` : '/api/queries';
             const method = queryId ? 'PUT' : 'POST';
-
-            // The toggleAutomaticOptions function now handles disabling inputs,
-            // so FormData will correctly exclude them when not needed.
-            const body = new URLSearchParams(new FormData(form));
+            
+            const formData = new FormData(form);
+            formData.append('frequency_type', formData.get('frequency_interval_hours') ? 'automatic' : 'manual');
+            const body = new URLSearchParams(formData);
 
             try {
                 const response = await fetch(url, {
@@ -284,14 +239,10 @@
                 document.getElementById('query_url').value = queryData.query_url;
                 document.getElementById('details').value = queryData.details;
                 document.getElementById('workplace_id').value = queryData.workplace_id;
-                document.getElementById('frequency_type').value = queryData.frequency_type;
-
-                // Set values, which might be null/undefined from the DB
-                runHourInput.value = queryData.run_hour;
-                runTimezoneInput.value = queryData.run_timezone;
                 frequencyIntervalInput.value = queryData.frequency_interval_hours;
-
-                toggleAutomaticOptions();
+                
+                testResultsContainer.style.display = 'none'; // Hide test results when starting an edit
+                bootstrap.Collapse.getOrCreateInstance(createSection).show();
                 cancelBtn.classList.remove('d-none');
                 window.scrollTo(0, 0);
             }
@@ -321,6 +272,7 @@
                 return;
             }
             testLog.innerHTML = 'Testing...';
+            testResultsContainer.style.display = 'block'; // Show the results container
             try {
                 const body = new URLSearchParams({ query_url: queryUrl });
                 const response = await fetch('/api/queries/test', {
@@ -337,17 +289,26 @@
             }
         });
 
-        frequencyTypeSelect.addEventListener('change', toggleAutomaticOptions);
+        createBtn.addEventListener('click', () => {
+            // If the form is in edit mode (has a query ID), clicking "Create" should
+            // reset it to a clean state.
+            const isEditMode = !!queryIdInput.value;
+            if (isEditMode) {
+                resetForm();
+                bootstrap.Collapse.getOrCreateInstance(createSection).show();
+            }
+        });
+
         cancelBtn.addEventListener('click', resetForm);
 
-        async function initializePage() {
-            populateTimezones();
-            await populateWorkplaces();
-            await fetchQueries();
-            toggleAutomaticOptions();
-        }
-
-        document.addEventListener('DOMContentLoaded', initializePage);
+        document.addEventListener('DOMContentLoaded', () => {
+            // Use the global initializePage function from main.js
+            // and pass our page-specific setup logic as a callback.
+            initializePage(async () => {
+                await populateWorkplaces();
+                await fetchQueries();
+            });
+        });
     </script>
 </body>
 </html>
